@@ -1,7 +1,10 @@
-/** One position's players' fantasy points for a single week (any order). */
-export interface PositionWeek {
+/** One player's fantasy points in one game. */
+export interface PlayerWeek {
   position: string;
-  scores: number[];
+  playerId: string;
+  season: number;
+  week: number;
+  points: number;
 }
 
 export interface RankStat {
@@ -13,6 +16,7 @@ export interface CurvesMeta {
   sampleCounts: Record<string, Record<string, number>>;
   seasons?: number[];
   scoring?: string;
+  method?: string;
   minObservations?: number;
   generatedAt?: string;
 }
@@ -21,6 +25,15 @@ export interface CurvesMeta {
 export type RankCurves = Record<string, Record<string, RankStat>> & {
   __meta__?: CurvesMeta;
 };
+
+export interface PredictiveOptions {
+  /** Prior games a player needs before we'll rank him. */
+  minTrailingGames: number;
+  /** First week we treat as a target (needs trailing data behind it). */
+  firstTargetWeek: number;
+  /** Drop a rank once it has fewer weeks of data than this. */
+  minObservations: number;
+}
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -33,43 +46,77 @@ function stat(samples: number[]): RankStat {
   return { mean: round2(mean), sd: round2(Math.sqrt(variance)) };
 }
 
+function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  const list = map.get(key);
+  if (list === undefined) map.set(key, [value]);
+  else list.push(value);
+}
+
 /**
- * For each position, rank each week's players by points (desc), then take the
- * mean and population sd of points at each rank across all weeks. A rank is
- * emitted only while it has at least `minObservations` weeks of data; the first
- * thin rank ends that position's curve.
+ * Predictive rank curves. For each week, rank the players who play by their
+ * trailing average, then record each one's *actual* points that week. The rank
+ * is re-indexed among players who play (matching how a weekly ranking source
+ * only lists players who'll suit up). The result is "how a player projected Nth
+ * actually performs" — the spread the Monte Carlo needs.
  */
-export function buildCurves(
-  weeks: readonly PositionWeek[],
+export function buildPredictiveCurves(
+  playerWeeks: readonly PlayerWeek[],
   rankCaps: Readonly<Record<string, number>>,
-  minObservations = 10,
+  opts: PredictiveOptions,
 ): RankCurves {
-  const sortedByPosition = new Map<string, number[][]>();
-  for (const week of weeks) {
-    const list = sortedByPosition.get(week.position) ?? [];
-    list.push([...week.scores].sort((a, b) => b - a));
-    sortedByPosition.set(week.position, list);
+  const bySeason = new Map<string, PlayerWeek[]>();
+  for (const pw of playerWeeks) {
+    push(bySeason, `${pw.position}|${pw.season}`, pw);
+  }
+
+  const samples = new Map<string, Map<number, number[]>>();
+
+  for (const [key, rows] of bySeason) {
+    const position = key.split("|")[0] ?? "";
+    const maxWeek = Math.max(...rows.map((r) => r.week));
+    const posSamples = samples.get(position) ?? new Map<number, number[]>();
+    samples.set(position, posSamples);
+
+    for (let target = opts.firstTargetWeek; target <= maxWeek; target++) {
+      const playedThisWeek = new Map<string, number>();
+      const trailing = new Map<string, { sum: number; n: number }>();
+      for (const r of rows) {
+        if (r.week === target) playedThisWeek.set(r.playerId, r.points);
+        else if (r.week < target) {
+          const t = trailing.get(r.playerId) ?? { sum: 0, n: 0 };
+          trailing.set(r.playerId, { sum: t.sum + r.points, n: t.n + 1 });
+        }
+      }
+      if (playedThisWeek.size === 0) continue;
+
+      const ranked: { id: string; avg: number }[] = [];
+      for (const id of playedThisWeek.keys()) {
+        const form = trailing.get(id);
+        if (form !== undefined && form.n >= opts.minTrailingGames) {
+          ranked.push({ id, avg: form.sum / form.n });
+        }
+      }
+      ranked.sort((a, b) => b.avg - a.avg);
+
+      ranked.forEach((player, index) => {
+        push(posSamples, index + 1, playedThisWeek.get(player.id) ?? 0);
+      });
+    }
   }
 
   const curves: RankCurves = {};
   const sampleCounts: CurvesMeta["sampleCounts"] = {};
 
-  for (const [position, weekScores] of sortedByPosition) {
+  for (const [position, posSamples] of samples) {
     const cap = rankCaps[position] ?? 0;
     const curve: Record<string, RankStat> = {};
     const counts: Record<string, number> = {};
-
     for (let rank = 1; rank <= cap; rank++) {
-      const samples: number[] = [];
-      for (const scores of weekScores) {
-        const value = scores[rank - 1];
-        if (value !== undefined) samples.push(value);
-      }
-      if (samples.length < minObservations) break;
-      curve[String(rank)] = stat(samples);
-      counts[String(rank)] = samples.length;
+      const xs = posSamples.get(rank);
+      if (xs === undefined || xs.length < opts.minObservations) break;
+      curve[String(rank)] = stat(xs);
+      counts[String(rank)] = xs.length;
     }
-
     curves[position] = curve;
     sampleCounts[position] = counts;
   }
