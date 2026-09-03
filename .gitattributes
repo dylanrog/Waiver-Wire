@@ -1,0 +1,22 @@
+# Normalize to LF in the repo and on checkout, on every platform.
+* text=auto eol=lf
+
+# Shell scripts must stay LF or they break on Linux (worktrees, CI).
+*.sh   text eol=lf
+
+# Lockfiles: normalize but don't diff in reviews.
+pnpm-lock.yaml -diff linguist-generated
+package-lock.json -diff linguist-generated
+
+# Binary assets — never touch these.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.avif binary
+*.woff  binary
+*.woff2 binary
+*.parquet binary
+*.feather binary
