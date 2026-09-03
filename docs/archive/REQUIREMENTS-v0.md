@@ -1,3 +1,12 @@
+> **ARCHIVED — superseded by [`docs/MVP.md`](../MVP.md) and [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md).**
+>
+> This was the original broad product spec (committed 2026-08-29). The MVP was
+> later narrowed sharply — deterministic Monte Carlo over Yahoo rankings, LLM only
+> for extraction and prose, one dashboard. Kept here for the Sleeper endpoint
+> catalogue, scoring-setting detail, and the long-range feature list.
+
+---
+
 # Fantasy Football Waiver Wire Agent — Requirements
 
 ## 1. Product Goal
