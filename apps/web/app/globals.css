@@ -1,0 +1,31 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * Design tokens — see CLAUDE.md "Design direction".
+ * Confidence is one continuous amber -> teal ramp, never a red/green split.
+ */
+@theme {
+  --color-ink: #10151f;
+  --color-surface: #1a212e;
+  --color-hairline: #2c3442;
+  --color-text: #e8ecf2;
+  --color-muted: #8d98ab;
+  --color-low: #c68a3b;
+  --color-high: #3fa88f;
+  --color-alert: #e86f51;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-archivo), var(--font-sans);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-ink);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
