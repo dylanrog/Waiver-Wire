@@ -6,7 +6,7 @@ recommendation is a distribution with a confidence score, not a point estimate.
 ## What it does
 
 - Connects to a Sleeper league by username — no account required
-- Pulls the week's positional rankings from Yahoo
+- Pulls the week's positional rankings from FantasyPros (expert consensus)
 - Finds the best available waiver adds at the positions you choose
 - Simulates your matchup 10,000 times and scores every start/sit decision
 - Recalculates against your actual opponent when you flip the opponent-aware toggle,
@@ -43,7 +43,7 @@ pnpm dev
 apps/web              Next.js app — UI and route handlers only
 packages/shared       Types and Zod schemas. The contract. Depends on nothing.
 packages/sleeper      Sleeper API client + name resolution
-packages/sources      Ranking source adapters (Yahoo first)
+packages/sources      Ranking source adapters (FantasyPros first)
 packages/projections  Rank→distribution, Monte Carlo, lineup solver
 packages/db           Drizzle schema and queries
 ```

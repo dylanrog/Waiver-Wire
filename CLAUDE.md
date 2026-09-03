@@ -59,11 +59,12 @@ worktrees, and a sideways import is a merge conflict waiting to happen.
 LLM output, route handler input. Parse, don't assume. A source that changes its markup
 should fail loudly at the parse step, not produce silent garbage three layers down.
 
-**The LLM never touches the math.** It has exactly two jobs: extracting structured
-rankings out of an article, and turning an already-computed recommendation into prose.
-Projections, simulations, confidence scores, and lineup optimization are deterministic
-functions with unit tests. If you find yourself asking a model to compare two numbers,
-stop.
+**The LLM never touches the math.** In the MVP it has exactly one job: turning an
+already-computed recommendation into prose. (The `RankingSource` interface also allows
+an LLM extraction step for article-based sources; FantasyPros, the first source, needs
+none — it ships structured JSON.) Projections, simulations, confidence scores, and
+lineup optimization are deterministic functions with unit tests. If you find yourself
+asking a model to compare two numbers, stop.
 
 **Cache every raw fetch.** Before parsing anything, write the raw payload to
 `raw_fetches` with its URL, timestamp, and week. This is not optional and not a

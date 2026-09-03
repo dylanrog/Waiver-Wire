@@ -54,13 +54,15 @@ These four touch disjoint directories, so they merge cleanly. Dispatch all at on
 > tests. The player index fetch must be separately callable so it can be cached daily.
 
 **sources**
-> Implement packages/sources: the RankingSource interface from shared, plus a Yahoo
-> implementation. Fetch the week's rankings article, write the raw body to the cache
-> callback before parsing, extract player/rank pairs per position using the Vercel AI
-> SDK with a Zod schema, populate sourceExcerpt with the span each ranking came from.
-> Export a registry so a second source can be added without touching callers. Start with
-> cheerio; only reach for Playwright if the content is genuinely JS-rendered, and say so
-> if you do.
+> Implement packages/sources: the RankingSource interface from shared, plus a
+> FantasyPros implementation, per docs/MVP.md section 2 and docs/notes/ranking-sources.md.
+> For each requested position, fetch the FantasyPros rankings page (scoring prefix from
+> the league settings), write the raw body to the cache callback before parsing, then
+> extract the embedded `ecrData` JSON and map each player to a Sleeper PlayerId.
+> Deterministic — no LLM, no headless browser. Populate sourceExcerpt with each row's
+> raw record. Export a registry so a second source can be added without touching
+> callers. Tests run against the checked-in fixtures in tests/fixtures/fantasypros/ —
+> no network.
 
 **rank_curves** — this one is a script, not a package
 > Write scripts/build-rank-curves.ts. Pull three seasons of nflverse weekly player data,

@@ -3,9 +3,9 @@
 ## Data flow
 
 ```
-Sleeper API ─────┐
-                 ├──> raw_fetches (cached, timestamped) ──┐
-Yahoo article ───┘                                        │
+Sleeper API ─────────┐
+                     ├──> raw_fetches (cached, timestamped) ──┐
+FantasyPros rankings ┘                                        │
                                                           v
                                             packages/sources
                                             parse → SourceRanking[]
@@ -29,8 +29,8 @@ Yahoo article ───┘                                        │
 
 ## The projection problem
 
-Yahoo rankings are ordinal. Monte Carlo needs distributions. Bridging them is the one
-piece of real modeling in the MVP.
+Expert-consensus rankings are ordinal. Monte Carlo needs distributions. Bridging them is
+the one piece of real modeling in the MVP.
 
 `packages/projections/data/rank_curves.json` maps positional rank to a mean and standard
 deviation of weekly fantasy points, per position, in your league's scoring format:
@@ -94,10 +94,15 @@ later want isolation, Neon's branching maps onto git branches and is a clean swa
 reliably forget to re-run `prisma generate` and then debug type errors that aren't real.
 
 **Source adapters from day one.** `packages/sources` exports a `RankingSource` interface.
-Yahoo is one implementation. Adding FantasyPros or a consensus average later is a new
+FantasyPros is the first implementation — its rankings pages embed a structured
+`ecrData` JSON blob, so the parse is deterministic (no LLM, no headless browser) and
+`robots.txt` permits `/nfl/rankings/` at a 5s crawl delay, which one fetch per position
+per week clears easily. Adding a second source or a consensus average later is a new
 file plus a registry entry, not a refactor. This is the single most likely thing to
-change — Yahoo's markup will break, and their terms are not friendly to scraping — so the
-seam belongs there from the first commit.
+change — a source's markup will break, or its terms will tighten — so the seam belongs
+there from the first commit. Yahoo was the original pick and was dropped when its
+weekly article turned out to render the ranking table client-side; see
+`docs/notes/ranking-sources.md`.
 
 ## Post-MVP, and what each one needs
 
