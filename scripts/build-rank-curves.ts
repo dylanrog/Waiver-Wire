@@ -1,22 +1,31 @@
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { buildCurves, type PositionWeek } from "./src/curves";
-import { DATASETS, groupBy, loadCsv, requireColumns } from "./src/nflverse";
+import { buildPredictiveCurves, type PlayerWeek } from "./src/curves";
+import { DATASETS, loadCsv, requireColumns } from "./src/nflverse";
 import { dstPoints, HALF_PPR, kickerPoints, offensePoints } from "./src/scoring";
 
 /**
  * Build packages/projections/data/rank_curves.json — positional rank → mean and
  * standard deviation of weekly fantasy points, from three past seasons of
  * nflverse data. Offline; the JSON is committed and must never run at request
- * time. See docs/ARCHITECTURE.md "The projection problem".
+ * time. See docs/ARCHITECTURE.md "The projection problem" and the method note in
+ * packages/projections/data/README.md.
  *
  *   pnpm --filter @waiver-wire/scripts rank-curves
  */
 
 const SEASONS = [2022, 2023, 2024];
 const SCORING = HALF_PPR;
-const MIN_OBSERVATIONS = 20;
+
+const CURVE_OPTIONS = {
+  /** A player needs this many prior games before we'll rank him. */
+  minTrailingGames: 2,
+  /** First week used as a target — weeks 1–3 only build trailing form. */
+  firstTargetWeek: 4,
+  /** Drop a rank once it has fewer than this many weeks of data. */
+  minObservations: 20,
+};
 
 /** How deep to publish each position — roughly where start/sit/waiver decisions stop. */
 const RANK_CAPS: Record<string, number> = { QB: 40, RB: 72, WR: 96, TE: 40, K: 36, DST: 32 };
@@ -44,13 +53,14 @@ async function pointsAllowedByGameTeam(): Promise<Map<string, number>> {
 async function collectSeason(
   season: number,
   pointsAllowed: Map<string, number>,
-): Promise<PositionWeek[]> {
-  const weeks: PositionWeek[] = [];
+): Promise<PlayerWeek[]> {
+  const out: PlayerWeek[] = [];
 
   const players = await loadCsv(DATASETS.playerWeek(season));
   requireColumns(
     players,
     [
+      "player_id",
       "position",
       "week",
       "season_type",
@@ -61,28 +71,32 @@ async function collectSeason(
     ],
     `stats_player_week_${season}`,
   );
-  const offense = players.filter(
-    (r) => r.season_type === "REG" && OFFENSE_POSITIONS.has(r.position ?? ""),
-  );
-  for (const [key, rows] of groupBy(
-    offense,
-    (r) => `${domainPosition(r.position ?? "")}|${r.week ?? ""}`,
-  )) {
-    const position = key.split("|")[0] ?? "";
-    weeks.push({ position, scores: rows.map((r) => offensePoints(r, SCORING)) });
+  for (const r of players) {
+    if (r.season_type !== "REG" || !OFFENSE_POSITIONS.has(r.position ?? "")) continue;
+    out.push({
+      position: domainPosition(r.position ?? ""),
+      playerId: r.player_id ?? "",
+      season,
+      week: Number(r.week),
+      points: offensePoints(r, SCORING),
+    });
   }
 
   const kickers = await loadCsv(DATASETS.kickingWeek(season));
   requireColumns(
     kickers,
-    ["week", "season_type", "fg_made_0_19", "fg_made_40_49", "pat_made"],
+    ["player_id", "week", "season_type", "fg_made_0_19", "fg_made_40_49", "pat_made"],
     `player_stats_kicking_${season}`,
   );
-  for (const [, rows] of groupBy(
-    kickers.filter((r) => r.season_type === "REG"),
-    (r) => r.week ?? "",
-  )) {
-    weeks.push({ position: "K", scores: rows.map((r) => kickerPoints(r, SCORING)) });
+  for (const r of kickers) {
+    if (r.season_type !== "REG") continue;
+    out.push({
+      position: "K",
+      playerId: r.player_id ?? "",
+      season,
+      week: Number(r.week),
+      points: kickerPoints(r, SCORING),
+    });
   }
 
   const teams = await loadCsv(DATASETS.teamWeek(season));
@@ -99,46 +113,44 @@ async function collectSeason(
     ],
     `stats_team_week_${season}`,
   );
-  for (const [, rows] of groupBy(
-    teams.filter((r) => r.season_type === "REG"),
-    (r) => r.week ?? "",
-  )) {
-    weeks.push({
+  for (const r of teams) {
+    if (r.season_type !== "REG") continue;
+    out.push({
       position: "DST",
-      scores: rows.map((r) =>
-        dstPoints(r, pointsAllowed.get(`${r.game_id}:${r.team}`) ?? 0, SCORING),
-      ),
+      playerId: r.team ?? "",
+      season,
+      week: Number(r.week),
+      points: dstPoints(r, pointsAllowed.get(`${r.game_id}:${r.team}`) ?? 0, SCORING),
     });
   }
 
-  return weeks;
+  return out;
 }
 
 async function main(): Promise<void> {
   const pointsAllowed = await pointsAllowedByGameTeam();
 
-  const weeks: PositionWeek[] = [];
+  const playerWeeks: PlayerWeek[] = [];
   for (const season of SEASONS) {
     console.log(`loading ${season}…`);
-    weeks.push(...(await collectSeason(season, pointsAllowed)));
+    playerWeeks.push(...(await collectSeason(season, pointsAllowed)));
   }
 
-  const curves = buildCurves(weeks, RANK_CAPS, MIN_OBSERVATIONS);
+  const curves = buildPredictiveCurves(playerWeeks, RANK_CAPS, CURVE_OPTIONS);
   curves.__meta__ = {
-    ...curves.__meta__,
     sampleCounts: curves.__meta__?.sampleCounts ?? {},
     seasons: SEASONS,
     scoring: "half-ppr offense; standard K and DST",
-    minObservations: MIN_OBSERVATIONS,
+    method: "predictive-rank (rank by trailing average, record the target week's actual points)",
+    minObservations: CURVE_OPTIONS.minObservations,
     generatedAt: new Date().toISOString(),
   };
 
-  // Pretty structure, but each {mean, sd} on one line — one rank per line.
+  // Pretty structure, each { mean, sd } on one line — one rank per line.
   const json = JSON.stringify(curves, null, 2).replace(
     /\{\s+"mean": ([\d.-]+),\s+"sd": ([\d.-]+)\s+\}/g,
     '{ "mean": $1, "sd": $2 }',
   );
-
   const outPath = fileURLToPath(
     new URL("../packages/projections/data/rank_curves.json", import.meta.url),
   );
