@@ -1,3 +1,18 @@
-// @waiver-wire/sleeper
-// Sleeper API client and name resolution. Implemented in Wave 1.
-export {};
+export { createSleeperClient, type SleeperClient } from "./client";
+export type { SleeperClientOptions } from "./http";
+export {
+  SleeperError,
+  SleeperNotFound,
+  SleeperRateLimited,
+  SleeperUnavailable,
+  SleeperResponseInvalid,
+} from "./errors";
+export * from "./schemas";
+export { toPlayer, toResolverPlayers } from "./map";
+export {
+  resolveRankingNames,
+  type NameQuery,
+  type ResolvedName,
+  type ResolveOutcome,
+  type ResolverPlayer,
+} from "./resolver";
