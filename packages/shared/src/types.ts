@@ -38,7 +38,7 @@ export type Player = z.infer<typeof Player>;
 
 // ─── Rankings (packages/sources) ─────────────────────────────────────────────
 
-export const SourceId = z.enum(["yahoo"]); // extend, don't replace
+export const SourceId = z.enum(["fantasypros"]); // first source; extend, don't replace
 export type SourceId = z.infer<typeof SourceId>;
 
 export const SourceRanking = z.object({
@@ -48,15 +48,19 @@ export const SourceRanking = z.object({
   /** 1-based within position. */
   rank: z.number().int().positive(),
   playerId: PlayerId,
-  /** Verbatim span this came from. Powers cited reasoning later — capture it now. */
+  /**
+   * Verbatim span or raw record this ranking came from (article text for prose
+   * sources; the source's own player object for structured ones). Powers cited
+   * reasoning later — capture it now.
+   */
   sourceExcerpt: z.string().nullable(),
   fetchedAt: z.coerce.date(),
 });
 export type SourceRanking = z.infer<typeof SourceRanking>;
 
 /**
- * Every ranking provider implements this. Yahoo is the first; FantasyPros and a
- * consensus averager come later without touching callers.
+ * Every ranking provider implements this. FantasyPros is the first; a second
+ * provider and a consensus averager come later without touching callers.
  *
  * Implementations must read through the raw_fetches cache and must not hit the
  * network more than once per (source, week).

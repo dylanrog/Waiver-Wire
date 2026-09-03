@@ -23,18 +23,27 @@ GET https://api.sleeper.app/v1/state/nfl          # current week
 The player index is large and changes rarely. Fetch it once per day at most, store it,
 and never fetch it in a request path.
 
-## 2. Weekly rankings from Yahoo
+## 2. Weekly rankings from FantasyPros
 
-Fetch the current week's Yahoo rankings article, extract player-to-rank pairs per
-position, normalize names to Sleeper player IDs.
+Fetch the current week's FantasyPros expert-consensus rankings for each position, one
+request per position per week. Each rankings page (`/nfl/rankings/{prefix}{pos}.php`)
+embeds a `var ecrData = { ... }` JSON blob: per player, its name, NFL team, position,
+consensus rank (`rank_ecr`), rank spread (`rank_min` / `rank_max` / `rank_std`),
+opponent, and bye week. Parse that blob — no LLM, no headless browser.
 
-Name matching will be the annoying part. Build a resolver that tries, in order: exact
-match, normalized match (strip punctuation, suffixes, casing), then last name plus team
-plus position. Log every unmatched name — an unmatched name is a silently missing
+Scoring is a URL prefix chosen from the league settings — `rb.php` (standard),
+`ppr-rb.php`, `half-point-ppr-rb.php`. QB, K, and DST don't vary by scoring.
+
+Normalize each row to a Sleeper player ID. Name matching is still the annoying part for
+offensive players, but every row carries team and position, so the resolver is more
+reliable: exact match, then normalized match (strip punctuation, suffixes, casing),
+then last name + team + position. DST rows map by team abbreviation (watch `JAC`→`JAX`
+and similar). Log every unmatched name — an unmatched name is a silently missing
 recommendation, so it should be visible, not swallowed.
 
-Extraction runs through the LLM with a Zod schema, because article markup varies. The
-*matching* afterward is deterministic code.
+The `RankingSource` interface still allows an LLM extraction step for future
+article-based or prose sources; FantasyPros needs none. See
+`docs/notes/ranking-sources.md`.
 
 ## 3. Waiver streaming
 
