@@ -1,6 +1,9 @@
 import {
+  type NameQuery,
+  type NameResolution,
   PlayerId,
   type Position,
+  type ResolvedName,
   type SourceId,
   type UnresolvedName,
   type Week,
@@ -16,24 +19,6 @@ export interface ResolverPlayer {
   fantasyPositions: string[] | null;
   /** NFL team abbreviation, or null for a free agent. */
   team: string | null;
-}
-
-/** One name to resolve, as it comes out of a ranking source. */
-export interface NameQuery {
-  rawName: string;
-  team: string | null;
-  position: Position;
-}
-
-export interface ResolvedName {
-  rawName: string;
-  position: Position;
-  playerId: PlayerId;
-}
-
-export interface ResolveOutcome {
-  resolved: ResolvedName[];
-  unresolved: UnresolvedName[];
 }
 
 const SUFFIX = /\s+(?:jr|sr|ii|iii|iv|v)\.?$/i;
@@ -89,7 +74,7 @@ export function resolveRankingNames(
   players: readonly ResolverPlayer[],
   queries: readonly NameQuery[],
   ctx: { source: SourceId; week: Week },
-): ResolveOutcome {
+): NameResolution {
   const resolved: ResolvedName[] = [];
   const unresolved: UnresolvedName[] = [];
 

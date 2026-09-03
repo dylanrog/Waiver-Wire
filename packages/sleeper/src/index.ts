@@ -9,10 +9,4 @@ export {
 } from "./errors";
 export * from "./schemas";
 export { toPlayer, toResolverPlayers } from "./map";
-export {
-  resolveRankingNames,
-  type NameQuery,
-  type ResolvedName,
-  type ResolveOutcome,
-  type ResolverPlayer,
-} from "./resolver";
+export { resolveRankingNames, type ResolverPlayer } from "./resolver";

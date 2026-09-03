@@ -58,6 +58,25 @@ export const SourceRanking = z.object({
 });
 export type SourceRanking = z.infer<typeof SourceRanking>;
 
+/** A name from a source that didn't resolve to a Sleeper player. Surface these. */
+export const UnresolvedName = z.object({
+  source: SourceId,
+  week: Week,
+  rawName: z.string(),
+  position: Position,
+});
+export type UnresolvedName = z.infer<typeof UnresolvedName>;
+
+/**
+ * Whatever `getRankings` could resolve, plus what it couldn't. An unresolved name
+ * is a silently missing recommendation, so it rides back with the result rather
+ * than being logged and dropped (MVP.md §2).
+ */
+export interface RankingsResult {
+  rankings: SourceRanking[];
+  unresolved: UnresolvedName[];
+}
+
 /**
  * Every ranking provider implements this. FantasyPros is the first; a second
  * provider and a consensus averager come later without touching callers.
@@ -68,17 +87,41 @@ export type SourceRanking = z.infer<typeof SourceRanking>;
 export interface RankingSource {
   readonly id: SourceId;
   readonly displayName: string;
-  getRankings(week: Week, positions: Position[]): Promise<SourceRanking[]>;
+  getRankings(week: Week, positions: Position[]): Promise<RankingsResult>;
 }
 
-/** A name from a source that didn't resolve to a Sleeper player. Surface these. */
-export const UnresolvedName = z.object({
-  source: SourceId,
-  week: Week,
+// ─── Name resolution (packages/sleeper produces, packages/sources consumes) ───
+
+/** One source name to resolve to a Sleeper PlayerId. */
+export const NameQuery = z.object({
   rawName: z.string(),
+  /** NFL team abbreviation from the source, or null. */
+  team: z.string().nullable(),
   position: Position,
 });
-export type UnresolvedName = z.infer<typeof UnresolvedName>;
+export type NameQuery = z.infer<typeof NameQuery>;
+
+export const ResolvedName = z.object({
+  rawName: z.string(),
+  position: Position,
+  playerId: PlayerId,
+});
+export type ResolvedName = z.infer<typeof ResolvedName>;
+
+export interface NameResolution {
+  resolved: ResolvedName[];
+  unresolved: UnresolvedName[];
+}
+
+/**
+ * Resolve source names to Sleeper ids. `packages/sleeper` provides the real one
+ * (bound to a player index); `apps/web` injects it into a `RankingSource` so
+ * `sources` never depends on `sleeper`.
+ */
+export type NameResolver = (
+  queries: NameQuery[],
+  ctx: { source: SourceId; week: Week },
+) => NameResolution;
 
 // ─── Projections (packages/projections) ──────────────────────────────────────
 

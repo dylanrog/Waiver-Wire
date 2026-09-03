@@ -141,7 +141,7 @@ importers:
   packages/shared:
     dependencies:
       zod:
-        specifier: ^3.24.1
+        specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
       typescript:
@@ -175,7 +175,13 @@ importers:
       '@waiver-wire/shared':
         specifier: workspace:*
         version: link:../shared
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
+      '@types/node':
+        specifier: ^22.20.1
+        version: 22.20.1
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
