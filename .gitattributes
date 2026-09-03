@@ -8,6 +8,10 @@
 pnpm-lock.yaml -diff linguist-generated
 package-lock.json -diff linguist-generated
 
+# Captured HTTP-response fixtures: store verbatim, keep out of review diffs.
+**/tests/fixtures/**/*.html -text -diff linguist-generated
+**/tests/fixtures/**/*.json -text -diff linguist-generated
+
 # Binary assets — never touch these.
 *.png  binary
 *.jpg  binary
