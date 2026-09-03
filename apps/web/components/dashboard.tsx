@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import type { CallExplanation, Objective, StartSitCall } from "@waiver-wire/shared";
+
 import type { FullAnalysis } from "@/lib/analysis";
 
 /** amber (low confidence) → teal (high). One continuous ramp — never red/green. */
@@ -15,11 +17,47 @@ function confidenceColor(c: number): string {
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
+type ExplainState = CallExplanation | "loading" | "error";
+
 export function Dashboard({ analysis }: { analysis: FullAnalysis }) {
   const [opponentAware, setOpponentAware] = useState(true);
+  const [open, setOpen] = useState<string | null>(null);
+  const [prose, setProse] = useState<Record<string, ExplainState>>({});
+
+  const objective: Objective = opponentAware ? "win_probability" : "expected_points";
   const view = opponentAware ? analysis.winProbability : analysis.expectedPoints;
-  const name = (id: string) => analysis.players[id]?.name ?? id;
+  const name = (id: string | null) => (id ? (analysis.players[id]?.name ?? id) : "");
   const winProb = analysis.winProbability.winProbability;
+
+  async function toggleRow(call: StartSitCall) {
+    const key = `${objective}:${call.slot}:${call.recommended}`;
+    if (open === key) {
+      setOpen(null);
+      return;
+    }
+    setOpen(key);
+    if (prose[key]) return;
+    setProse((p) => ({ ...p, [key]: "loading" }));
+    try {
+      const res = await fetch("/api/explain", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          call,
+          objective,
+          recommendedName: name(call.recommended),
+          alternativeName: call.alternative ? name(call.alternative) : null,
+          currentName: call.current ? name(call.current) : null,
+          opponentName: analysis.opponentName,
+          winProbability: winProb,
+        }),
+      });
+      const json = (await res.json()) as { data?: CallExplanation };
+      setProse((p) => ({ ...p, [key]: json.data ?? "error" }));
+    } catch {
+      setProse((p) => ({ ...p, [key]: "error" }));
+    }
+  }
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col gap-4 p-4">
@@ -54,29 +92,56 @@ export function Dashboard({ analysis }: { analysis: FullAnalysis }) {
 
       <ul className="flex flex-col">
         {view.calls.map((call) => {
+          const key = `${objective}:${call.slot}:${call.recommended}`;
           const swap = call.current !== null && call.current !== call.recommended;
           const low = call.confidence < 0.6;
+          const detail = prose[key];
           return (
-            <li
-              key={call.slot + call.recommended}
-              className={`flex items-center gap-3 border-b border-hairline py-2.5 ${
-                swap ? "border-l-2 border-l-alert pl-2" : ""
-              }`}
-            >
-              <span className="w-10 shrink-0 text-xs text-muted">{call.slot}</span>
-              <span className="min-w-0 flex-1 truncate">{name(call.recommended)}</span>
-              {swap ? (
-                <span className="text-xs text-alert" title={`over ${name(call.current!)}`}>
-                  ↑ swap
-                </span>
-              ) : null}
-              {low ? <span title="the choice barely matters">⚠</span> : null}
-              <span
-                className="w-10 text-right text-sm tabular-nums"
-                style={{ color: confidenceColor(call.confidence) }}
+            <li key={key} className={swap ? "border-l-2 border-l-alert pl-2" : ""}>
+              <button
+                onClick={() => void toggleRow(call)}
+                className="flex w-full items-center gap-3 border-b border-hairline py-2.5 text-left"
               >
-                {pct(call.confidence)}
-              </span>
+                <span className="w-10 shrink-0 text-xs text-muted">{call.slot}</span>
+                <span className="min-w-0 flex-1 truncate">{name(call.recommended)}</span>
+                {swap ? <span className="text-xs text-alert">↑ swap</span> : null}
+                {low ? <span title="the choice barely matters">⚠</span> : null}
+                <span
+                  className="w-10 text-right text-sm tabular-nums"
+                  style={{ color: confidenceColor(call.confidence) }}
+                >
+                  {pct(call.confidence)}
+                </span>
+              </button>
+
+              {open === key ? (
+                <div className="flex flex-col gap-2 border-b border-hairline bg-surface p-3 text-sm">
+                  {detail === "loading" || detail === undefined ? (
+                    <p className="text-muted">thinking…</p>
+                  ) : detail === "error" ? (
+                    <p className="text-alert">couldn&apos;t generate an explanation</p>
+                  ) : (
+                    <>
+                      {swap ? (
+                        <p className="text-xs text-muted">over {name(call.current)}</p>
+                      ) : null}
+                      <ul className="flex flex-col gap-0.5">
+                        {detail.pros.map((p) => (
+                          <li key={p} className="text-high">
+                            + {p}
+                          </li>
+                        ))}
+                        {detail.cons.map((c) => (
+                          <li key={c} className="text-low">
+                            − {c}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="text-xs text-muted">{detail.toggleEffect}</p>
+                    </>
+                  )}
+                </div>
+              ) : null}
             </li>
           );
         })}

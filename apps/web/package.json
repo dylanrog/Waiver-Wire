@@ -11,11 +11,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.48",
     "@waiver-wire/db": "workspace:*",
     "@waiver-wire/projections": "workspace:*",
     "@waiver-wire/shared": "workspace:*",
     "@waiver-wire/sleeper": "workspace:*",
     "@waiver-wire/sources": "workspace:*",
+    "ai": "^7.0.90",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
