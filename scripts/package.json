@@ -1,0 +1,21 @@
+{
+  "name": "@waiver-wire/scripts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "rank-curves": "tsx build-rank-curves.ts"
+  },
+  "dependencies": {
+    "@waiver-wire/shared": "workspace:*",
+    "csv-parse": "^7.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "tsx": "^4.23.13",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.0"
+  }
+}
