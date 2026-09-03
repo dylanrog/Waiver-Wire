@@ -16,6 +16,7 @@ export default tseslint.config(
       "**/.next/**",
       "**/coverage/**",
       "**/next-env.d.ts",
+      "**/public/**",
       "docs/archive/**",
     ],
   },
