@@ -5,3 +5,4 @@ export { simulateMatchup, summarize, drawTeamTotal, type MatchupSim } from "./si
 export { optimalLineup, type RosterEntry } from "./lineup";
 export { evaluateSlot, type SlotCandidate, type SlotInput } from "./calls";
 export { analyzeMatchup, type AnalyzeInput } from "./analyze";
+export { waiverScan, type WaiverScanInput, type WaiverStarter } from "./waivers";
