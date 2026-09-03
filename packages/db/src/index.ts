@@ -1,3 +1,3 @@
-// @waiver-wire/db
-// Drizzle schema and queries. Implemented in Wave 1.
-export {};
+export * from "./schema";
+export * from "./queries";
+export { createDb, type Db } from "./client";
