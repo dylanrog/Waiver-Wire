@@ -1,6 +1,6 @@
 "use client";
 
-import type { CallExplanation } from "@waiver-wire/shared";
+import type { CallExplanation, StartSitCall } from "@waiver-wire/shared";
 
 import type { FullAnalysis } from "@/lib/analysis";
 import { confidenceColor, pct } from "@/lib/confidence";
@@ -25,6 +25,13 @@ const isBench = <T extends { slot: string }>(p: T) => p.slot === "BENCH";
 
 interface Props {
   analysis: FullAnalysis;
+  /**
+   * The active objective's start/sit calls, keyed by `call.recommended`. Flips
+   * with the opponent-aware toggle, so a row's recommendation, confidence and
+   * swap badge all track the toggle (analyze.ts guarantees `recommended` is
+   * unique across a calls array).
+   */
+  callByPlayerId: Map<string, StartSitCall>;
   onToggleRow: (player: MyMatchupPlayer) => void;
   openKey: string | null;
   prose: Record<string, ExplainState>;
@@ -32,7 +39,7 @@ interface Props {
 }
 
 /** My full lineup wide on the left; the opponent's roster as a narrow rail. */
-export function Matchup({ analysis, onToggleRow, openKey, prose, rowKey }: Props) {
+export function Matchup({ analysis, callByPlayerId, onToggleRow, openKey, prose, rowKey }: Props) {
   const myStarters = analysis.myTeam.filter((p) => !isBench(p));
   const myBench = analysis.myTeam.filter(isBench);
   const oppStarters = analysis.opponentTeam.filter((p) => !isBench(p));
@@ -40,8 +47,9 @@ export function Matchup({ analysis, onToggleRow, openKey, prose, rowKey }: Props
 
   const playerName = (id: string) => analysis.players[id]?.name ?? id;
 
-  const row = (mine: MyMatchupPlayer, opp: MatchupPlayer | null) => {
-    const key = rowKey(mine);
+  const row = (mine: MyMatchupPlayer | null, opp: MatchupPlayer | null, fallbackKey: string) => {
+    const call = mine ? (callByPlayerId.get(mine.playerId) ?? null) : null;
+    const key = mine ? rowKey(mine) : fallbackKey;
     // A row is tappable whenever it carries a call — starter OR the bench player
     // the sim wants started over a current starter.
     return (
@@ -49,13 +57,16 @@ export function Matchup({ analysis, onToggleRow, openKey, prose, rowKey }: Props
         key={key}
         mine={mine}
         opp={opp}
-        expanded={openKey === key}
-        detail={prose[key]}
-        onClick={mine.call ? () => onToggleRow(mine) : undefined}
+        call={call}
+        expanded={mine != null && openKey === key}
+        detail={mine ? prose[key] : undefined}
+        onClick={mine && call ? () => onToggleRow(mine) : undefined}
         name={playerName}
       />
     );
   };
+
+  const benchRows = Math.max(myBench.length, oppBench.length);
 
   return (
     <section className="flex flex-col">
@@ -66,10 +77,12 @@ export function Matchup({ analysis, onToggleRow, openKey, prose, rowKey }: Props
         </span>
       </div>
 
-      {myStarters.map((mine, i) => row(mine, oppStarters[i] ?? null))}
+      {myStarters.map((mine, i) => row(mine, oppStarters[i] ?? null, `s${i}`))}
 
       <div className="mt-2 border-t border-hairline pt-1.5 text-xs text-muted">bench</div>
-      {myBench.map((mine, i) => row(mine, oppBench[i] ?? null))}
+      {Array.from({ length: benchRows }, (_, i) =>
+        row(myBench[i] ?? null, oppBench[i] ?? null, `b${i}`),
+      )}
     </section>
   );
 }
@@ -77,59 +90,64 @@ export function Matchup({ analysis, onToggleRow, openKey, prose, rowKey }: Props
 function MatchupRow({
   mine,
   opp,
+  call,
   expanded,
   detail,
   onClick,
   name,
 }: {
-  mine: MyMatchupPlayer;
+  mine: MyMatchupPlayer | null;
   opp: MatchupPlayer | null;
+  call: StartSitCall | null;
   expanded: boolean;
   detail: ExplainState | undefined;
   onClick: (() => void) | undefined;
   name: (id: string) => string;
 }) {
-  const call = mine.call;
   const displaced =
     call?.current && call.current !== call.recommended ? call.current : null;
 
   return (
     <div className={displaced ? "border-l-2 border-l-alert pl-1.5" : "pl-1.5"}>
       <div className="flex items-start gap-2 border-b border-hairline py-1.5">
-        <button
-          type="button"
-          onClick={onClick}
-          disabled={!onClick}
-          className="flex min-w-0 flex-1 flex-col items-start text-left disabled:cursor-default"
-        >
-          <span className="flex w-full items-center gap-1.5">
-            <PositionChip position={mine.position} />
-            <span className="min-w-0 flex-1 truncate">
-              {shortName(mine.firstName, mine.lastName, mine.fullName)}
-              <Injury status={mine.injuryStatus} />
-            </span>
-            <span className="shrink-0 text-sm tabular-nums">
-              <span className="text-text">{num(mine.ourProjection?.mean)}</span>
-              <span className="text-muted"> · {num(mine.platformPoints)}</span>
-            </span>
-            {call ? (
-              <span
-                className="w-9 shrink-0 text-right text-sm tabular-nums"
-                style={{ color: confidenceColor(call.confidence) }}
-              >
-                {pct(call.confidence)}
+        {mine ? (
+          <button
+            type="button"
+            onClick={onClick}
+            disabled={!onClick}
+            className="flex min-w-0 flex-1 flex-col items-start text-left disabled:cursor-default"
+          >
+            <span className="flex w-full items-center gap-1.5">
+              <PositionChip position={mine.position} />
+              <span className="min-w-0 flex-1 truncate">
+                {shortName(mine.firstName, mine.lastName, mine.fullName)}
+                <Injury status={mine.injuryStatus} />
               </span>
-            ) : (
-              <span className="w-9 shrink-0" />
-            )}
-          </span>
-          <span className="pl-9 text-xs text-muted">
-            {formatGameLine(mine.game, mine.team)}
-            {displaced ? (
-              <span className="text-alert"> · ↑ over {name(displaced)}</span>
-            ) : null}
-          </span>
-        </button>
+              <span className="shrink-0 text-sm tabular-nums">
+                <span className="text-text">{num(mine.ourProjection?.mean)}</span>
+                <span className="text-muted"> · {num(mine.platformPoints)}</span>
+              </span>
+              {call ? (
+                <span
+                  className="w-9 shrink-0 text-right text-sm tabular-nums"
+                  style={{ color: confidenceColor(call.confidence) }}
+                >
+                  {pct(call.confidence)}
+                </span>
+              ) : (
+                <span className="w-9 shrink-0" />
+              )}
+            </span>
+            <span className="pl-9 text-xs text-muted">
+              {formatGameLine(mine.game, mine.team)}
+              {displaced ? (
+                <span className="text-alert"> · ↑ over {name(displaced)}</span>
+              ) : null}
+            </span>
+          </button>
+        ) : (
+          <div className="min-w-0 flex-1" aria-hidden />
+        )}
 
         <div className="w-28 shrink-0 overflow-hidden border-l border-hairline pl-1.5">
           {opp ? (

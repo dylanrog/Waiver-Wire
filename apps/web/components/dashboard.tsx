@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import type { CallExplanation, Objective } from "@waiver-wire/shared";
+import type { CallExplanation, Objective, StartSitCall } from "@waiver-wire/shared";
 
 import type { FullAnalysis } from "@/lib/analysis";
 import { pct } from "@/lib/confidence";
@@ -20,11 +20,18 @@ export function Dashboard({ analysis }: { analysis: FullAnalysis }) {
   const name = (id: string | null) => (id ? (analysis.players[id]?.name ?? id) : "");
   const winProb = analysis.winProbability.winProbability;
 
+  // Start/sit calls for the active objective, so the whole roster view — which
+  // player is recommended, the confidence %, the swap badges — tracks the
+  // opponent-aware toggle. `recommended` is unique across a calls array.
+  const callByPlayerId = new Map<string, StartSitCall>(
+    view.calls.map((c) => [c.recommended as string, c]),
+  );
+
   const rowKey = (player: MyMatchupPlayer) =>
     `${objective}:${player.slot}:${player.playerId}`;
 
   async function toggleRow(player: MyMatchupPlayer) {
-    const call = player.call;
+    const call = callByPlayerId.get(player.playerId) ?? null;
     if (call === null) return;
 
     const key = rowKey(player);
@@ -89,6 +96,7 @@ export function Dashboard({ analysis }: { analysis: FullAnalysis }) {
 
       <Matchup
         analysis={analysis}
+        callByPlayerId={callByPlayerId}
         onToggleRow={(player) => void toggleRow(player)}
         openKey={open}
         prose={prose}
