@@ -6,6 +6,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -60,6 +61,8 @@ export const rosters = pgTable(
     starters: jsonb("starters").$type<string[]>().notNull().default([]),
     reserve: jsonb("reserve").$type<string[]>().notNull().default([]),
     taxi: jsonb("taxi").$type<string[]>().notNull().default([]),
+    /** The whole Sleeper roster object, kept verbatim — see spec §4b. */
+    raw: jsonb("raw").$type<Record<string, unknown>>(),
     settings: jsonb("settings").$type<Record<string, unknown>>(),
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     ...timestamps,
@@ -117,6 +120,55 @@ export const sourceRankings = pgTable(
   (t) => [
     uniqueIndex("source_rankings_snapshot_uq").on(t.source, t.week, t.position, t.rank),
     index("source_rankings_lookup_idx").on(t.source, t.week, t.position),
+  ],
+);
+
+// ─── Platform projections (Sleeper's own weekly numbers — display only) ──────
+
+export const platformProjections = pgTable(
+  "platform_projections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playerId: text("player_id")
+      .notNull()
+      .references(() => players.id),
+    season: text("season").notNull(),
+    week: integer("week").notNull(),
+    /** 'PPR' | 'HALF' | 'STD' — the league's format. */
+    scoring: text("scoring").notNull(),
+    /** The matching pts_* value; null when Sleeper has no number for this player. */
+    points: real("points"),
+    raw: jsonb("raw").$type<Record<string, unknown>>(),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("platform_projections_uq").on(t.playerId, t.season, t.week, t.scoring),
+    index("platform_projections_lookup_idx").on(t.season, t.week, t.scoring),
+  ],
+);
+
+// ─── NFL schedule (ESPN scoreboard — kickoff, home/away, status) ─────────────
+
+export const nflGames = pgTable(
+  "nfl_games",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    season: text("season").notNull(),
+    week: integer("week").notNull(),
+    kickoff: timestamp("kickoff", { withTimezone: true }).notNull(),
+    /** Sleeper team abbreviations (normalized from ESPN's). */
+    homeTeam: text("home_team").notNull(),
+    awayTeam: text("away_team").notNull(),
+    /** 'scheduled' | 'in_progress' | 'final'. */
+    status: text("status").notNull(),
+    raw: jsonb("raw").$type<Record<string, unknown>>(),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("nfl_games_uq").on(t.season, t.week, t.homeTeam, t.awayTeam),
+    index("nfl_games_week_idx").on(t.season, t.week),
   ],
 );
 
