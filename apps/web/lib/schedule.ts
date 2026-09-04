@@ -31,8 +31,8 @@ export function normalizeTeam(espnAbbr: string): string {
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 const SOURCE = "espn:schedule";
 
-function scoreboardUrl(week: number): string {
-  return `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2`;
+function scoreboardUrl(season: string, week: number): string {
+  return `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&dates=${season}`;
 }
 
 const Competitor = z.object({
@@ -46,7 +46,7 @@ const Event = z.object({
     .array(z.object({ competitors: z.array(Competitor).length(2) }))
     .nonempty(),
 });
-const Scoreboard = z.object({ events: z.array(Event) });
+const Scoreboard = z.object({ season: z.object({ year: z.number() }), events: z.array(Event) });
 
 function toStatus(espnName: string): NflGameInput["status"] {
   if (espnName === "STATUS_FINAL") return "final";
@@ -54,8 +54,13 @@ function toStatus(espnName: string): NflGameInput["status"] {
   return "scheduled";
 }
 
-export function parseScoreboard(json: unknown, _season: string, _week: number): NflGameInput[] {
+export function parseScoreboard(json: unknown, season: string, _week: number): NflGameInput[] {
   const board = Scoreboard.parse(json);
+  if (board.season.year !== Number(season)) {
+    throw new Error(
+      `schedule: ESPN returned season ${board.season.year}, expected ${season} — check the "dates" query param`,
+    );
+  }
   return board.events.map((event) => {
     const competitors = event.competitions[0].competitors;
     const home = competitors.find((c) => c.homeAway === "home");
@@ -102,7 +107,7 @@ export async function ensureNflSchedule(season: string, week: number): Promise<v
     .limit(1);
   if (latest && Date.now() - latest.fetchedAt.getTime() < CACHE_TTL_MS) return;
 
-  const url = scoreboardUrl(week);
+  const url = scoreboardUrl(season, week);
   try {
     const res = await fetch(url, {
       headers: { "user-agent": env().FETCH_USER_AGENT, accept: "application/json" },
@@ -112,6 +117,7 @@ export async function ensureNflSchedule(season: string, week: number): Promise<v
     await insertRawFetch(db(), { url, source: SOURCE, week, body, contentType: "application/json" });
     await replaceNflGames(db(), { season, week }, parseScoreboard(JSON.parse(body), season, week));
   } catch (error) {
+    console.error(`schedule: ESPN scoreboard refresh failed for week ${week}`, error);
     if (latest) return; // keep the stale copy rather than blanking the view
     throw error;
   }

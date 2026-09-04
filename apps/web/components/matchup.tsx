@@ -138,7 +138,7 @@ function MatchupRow({
                 <span className="w-9 shrink-0" />
               )}
             </span>
-            <span className="pl-9 text-xs text-muted">
+            <span className="pl-9 text-xs text-muted" suppressHydrationWarning>
               {formatGameLine(mine.game, mine.team)}
               {displaced ? (
                 <span className="text-alert"> · ↑ over {name(displaced)}</span>
@@ -159,7 +159,10 @@ function MatchupRow({
                   <Injury status={opp.injuryStatus} />
                 </span>
               </span>
-              <span className="block truncate pl-9 text-xs text-muted tabular-nums">
+              <span
+                className="block truncate pl-9 text-xs text-muted tabular-nums"
+                suppressHydrationWarning
+              >
                 {[num(opp.platformPoints), formatGameLine(opp.game, opp.team)]
                   .filter(Boolean)
                   .join(" · ")}

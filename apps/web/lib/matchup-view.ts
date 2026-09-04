@@ -1,4 +1,4 @@
-import type { Position, Slot, StartSitCall } from "@waiver-wire/shared";
+import type { Position, Slot } from "@waiver-wire/shared";
 
 import type { TeamGame } from "./schedule";
 
@@ -32,7 +32,6 @@ export interface MatchupPlayer {
 
 export interface MyMatchupPlayer extends MatchupPlayer {
   ourProjection: { mean: number; sd: number } | null;
-  call: StartSitCall | null;
 }
 
 const FANTASY = new Set(["QB", "RB", "WR", "TE", "K", "DST"]);
@@ -89,13 +88,6 @@ export function buildTeam(args: BaseArgs): MatchupPlayer[] {
 export function buildMyTeam(
   args: BaseArgs & {
     ourProjections: Map<string, { mean: number; sd: number }>;
-    /**
-     * The sim's start/sit calls, keyed by `call.recommended` (the player id).
-     * `analyzeMatchup` guarantees `recommended` is unique across calls, and the
-     * recommendation may be a bench player — that IS the "start X" swap badge.
-     * Slot-index keying is unreliable: all-bye slots are skipped in the call list.
-     */
-    callsByPlayer: Map<string, StartSitCall>;
   },
 ): MyMatchupPlayer[] {
   const byId = new Map(args.rows.map((r) => [r.id, r]));
@@ -103,6 +95,5 @@ export function buildMyTeam(
   return order(args).map((entry) => ({
     ...base(entry, args, byId),
     ourProjection: args.ourProjections.get(entry.id) ?? null,
-    call: args.callsByPlayer.get(entry.id) ?? null,
   }));
 }

@@ -101,15 +101,18 @@ export async function analyzeLeague(leagueId: string): Promise<FullAnalysis | nu
   // outage take down the dashboard: on a cold cache both `ensure*` rethrow, so
   // isolate the failure here and fall through to whatever the readers below can
   // load. `analyzeLeague` owns this resilience call — the `ensure*` rethrow
-  // contract stays intact for other callers.
-  try {
-    await Promise.all([
-      ensurePlatformProjections(season, week, scoring),
-      ensureNflSchedule(season, week),
-    ]);
-  } catch {
-    // Degrade: the readers return empty maps → no platform points, game: null
-    // everywhere. Better than a 500.
+  // contract stays intact for other callers. `Promise.allSettled` (rather than
+  // `Promise.all` + try/catch) keeps one source's failure from obscuring the
+  // other's, and each rejection is logged with which source it came from.
+  const refreshResults = await Promise.allSettled([
+    ensurePlatformProjections(season, week, scoring),
+    ensureNflSchedule(season, week),
+  ]);
+  const REFRESH_LABELS = ["platform projections", "NFL schedule"];
+  for (const [i, result] of refreshResults.entries()) {
+    if (result.status === "rejected") {
+      console.error(`analyzeLeague: ${REFRESH_LABELS[i]} refresh failed — degrading`, result.reason);
+    }
   }
   // Both readers are a plain `select().where()` over their snapshot table with
   // no throwing post-processing — an empty table just yields an empty Map.
@@ -251,7 +254,6 @@ export async function analyzeLeague(leagueId: string): Promise<FullAnalysis | nu
   const ourProjections = new Map(
     roster.map((r) => [r.playerId as string, { mean: r.projection.mean, sd: r.projection.sd }]),
   );
-  const callsByPlayer = new Map(winProbability.calls.map((c) => [c.recommended as string, c]));
 
   const rosterPositions = league.rosterPositions ?? [];
   const myTeam = buildMyTeam({
@@ -262,7 +264,6 @@ export async function analyzeLeague(leagueId: string): Promise<FullAnalysis | nu
     games: gamesByTeam,
     platformPoints,
     ourProjections,
-    callsByPlayer,
   });
 
   const opponentTeam = oppRosterRow

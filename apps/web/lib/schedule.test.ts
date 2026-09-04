@@ -28,7 +28,7 @@ describe("normalizeTeam", () => {
 
 describe("parseScoreboard", () => {
   it("produces one row per event with normalized teams and a UTC kickoff", () => {
-    const rows = parseScoreboard(scoreboard, "2025", 1);
+    const rows = parseScoreboard(scoreboard, "2026", 1);
     expect(rows.length).toBeGreaterThan(0);
     for (const r of rows) {
       expect(SLEEPER_TEAMS.has(r.homeTeam)).toBe(true);
@@ -38,7 +38,16 @@ describe("parseScoreboard", () => {
     }
   });
   it("throws on a malformed payload rather than returning []", () => {
-    expect(() => parseScoreboard({ events: [{ competitions: [{}] }] }, "2025", 1)).toThrow();
+    expect(() =>
+      parseScoreboard(
+        { season: { year: 2026 }, events: [{ competitions: [{}] }] },
+        "2026",
+        1,
+      ),
+    ).toThrow();
+  });
+  it("throws when the response's season doesn't match the requested one", () => {
+    expect(() => parseScoreboard(scoreboard, "2025", 1)).toThrow(/season/i);
   });
 });
 
