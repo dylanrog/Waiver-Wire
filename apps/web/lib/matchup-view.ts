@@ -89,24 +89,20 @@ export function buildTeam(args: BaseArgs): MatchupPlayer[] {
 export function buildMyTeam(
   args: BaseArgs & {
     ourProjections: Map<string, { mean: number; sd: number }>;
-    /** slot index within `rosterPositions.filter(non-bench)` → the call for that slot. */
-    callsBySlotIndex: Map<number, StartSitCall>;
+    /**
+     * The sim's start/sit calls, keyed by `call.recommended` (the player id).
+     * `analyzeMatchup` guarantees `recommended` is unique across calls, and the
+     * recommendation may be a bench player — that IS the "start X" swap badge.
+     * Slot-index keying is unreliable: all-bye slots are skipped in the call list.
+     */
+    callsByPlayer: Map<string, StartSitCall>;
   },
 ): MyMatchupPlayer[] {
   const byId = new Map(args.rows.map((r) => [r.id, r]));
-  const startingSlots = args.rosterPositions.filter((s) => !BENCH_SLOTS.has(s));
-  const slotIndexById = new Map<string, number>();
-  startingSlots.forEach((_slot, i) => {
-    const id = args.starters[i];
-    if (id && id !== EMPTY) slotIndexById.set(id, i);
-  });
 
-  return order(args).map((entry) => {
-    const idx = slotIndexById.get(entry.id);
-    return {
-      ...base(entry, args, byId),
-      ourProjection: args.ourProjections.get(entry.id) ?? null,
-      call: idx !== undefined ? (args.callsBySlotIndex.get(idx) ?? null) : null,
-    };
-  });
+  return order(args).map((entry) => ({
+    ...base(entry, args, byId),
+    ourProjection: args.ourProjections.get(entry.id) ?? null,
+    call: args.callsByPlayer.get(entry.id) ?? null,
+  }));
 }

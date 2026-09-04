@@ -36,16 +36,17 @@ describe("buildTeam (opponent — no numbers we compute)", () => {
 });
 
 describe("buildMyTeam", () => {
-  it("adds our projection and the slot's call to each starter; bench has call null", () => {
-    const call = {
-      slot: "RB" as const,
-      recommended: "rb1" as PlayerId,
-      current: "rb1" as PlayerId,
-      confidence: 0.52,
-      alternative: "rb2" as PlayerId,
-      confidenceUnderOtherObjective: 0.55,
-      projection: { playerId: "rb1" as PlayerId, mean: 18.4, sd: 8.2, basis: { source: "fantasypros" as const, positionRank: 3 } },
-    };
+  const call = {
+    slot: "RB" as const,
+    recommended: "rb1" as PlayerId,
+    current: "rb1" as PlayerId,
+    confidence: 0.52,
+    alternative: "rb2" as PlayerId,
+    confidenceUnderOtherObjective: 0.55,
+    projection: { playerId: "rb1" as PlayerId, mean: 18.4, sd: 8.2, basis: { source: "fantasypros" as const, positionRank: 3 } },
+  };
+
+  it("adds our projection and the call (keyed by player) to the recommended player; others null", () => {
     const team = buildMyTeam({
       rosterPositions: ["QB", "RB", "BN"],
       starters: ["qb", "rb1"],
@@ -54,10 +55,27 @@ describe("buildMyTeam", () => {
       games,
       platformPoints: new Map([["rb1", 17]]),
       ourProjections: new Map([["rb1", { mean: 18.4, sd: 8.2 }]]),
-      callsBySlotIndex: new Map([[1, call]]),
+      callsByPlayer: new Map([["rb1", call]]),
     });
     expect(team[1]!.ourProjection).toEqual({ mean: 18.4, sd: 8.2 });
     expect(team[1]!.call?.confidence).toBe(0.52);
     expect(team[2]!.call).toBeNull();
+  });
+
+  it("puts the call on a bench player when the sim recommends starting them (swap-in)", () => {
+    const swapIn = { ...call, recommended: "rb2" as PlayerId, current: "rb1" as PlayerId };
+    const team = buildMyTeam({
+      rosterPositions: ["QB", "RB", "BN"],
+      starters: ["qb", "rb1"],
+      allPlayerIds: ["qb", "rb1", "rb2"],
+      rows,
+      games,
+      platformPoints: new Map(),
+      ourProjections: new Map(),
+      callsByPlayer: new Map([["rb2", swapIn]]),
+    });
+    expect(team[2]!.playerId).toBe("rb2"); // the bench row
+    expect(team[2]!.call?.confidence).toBe(0.52);
+    expect(team[1]!.call).toBeNull(); // current starter carries no call
   });
 });

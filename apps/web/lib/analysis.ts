@@ -20,7 +20,16 @@ import type {
 } from "@waiver-wire/shared";
 
 import { db, sleeper } from "./clients";
+import {
+  buildMyTeam,
+  buildTeam,
+  type MatchupPlayer,
+  type MyMatchupPlayer,
+  type PlayerRow,
+} from "./matchup-view";
+import { ensurePlatformProjections, loadPlatformPoints } from "./platform-projections";
 import { loadWeekRankings, scoringOf } from "./rankings";
+import { ensureNflSchedule, loadGamesByTeam } from "./schedule";
 
 const BENCH_SLOTS = new Set(["BN", "IR", "TAXI"]);
 const FANTASY_POSITIONS = new Set<Position>(["QB", "RB", "WR", "TE", "K", "DST"]);
@@ -44,10 +53,13 @@ export interface FullAnalysis {
   week: number;
   scoring: string;
   opponentName: string;
+  opponentTeamName: string;
   expectedPoints: MatchupAnalysis;
   winProbability: MatchupAnalysis;
   waivers: WaiverScan[];
   players: Record<string, PlayerCard>;
+  myTeam: MyMatchupPlayer[];
+  opponentTeam: MatchupPlayer[];
 }
 
 function averageOpponent(slots: Slot[]): Projection[] {
@@ -83,6 +95,28 @@ export async function analyzeLeague(leagueId: string): Promise<FullAnalysis | nu
   const week = state.week;
   const scoring = scoringOf(league.scoringSettings);
   const { rankings } = await loadWeekRankings(week, scoring);
+
+  const season = league.season;
+  // Refresh the platform projections + NFL schedule, but never let an upstream
+  // outage take down the dashboard: on a cold cache both `ensure*` rethrow, so
+  // isolate the failure here and fall through to whatever the readers below can
+  // load. `analyzeLeague` owns this resilience call — the `ensure*` rethrow
+  // contract stays intact for other callers.
+  try {
+    await Promise.all([
+      ensurePlatformProjections(season, week, scoring),
+      ensureNflSchedule(season, week),
+    ]);
+  } catch {
+    // Degrade: the readers return empty maps → no platform points, game: null
+    // everywhere. Better than a 500.
+  }
+  // Both readers are a plain `select().where()` over their snapshot table with
+  // no throwing post-processing — an empty table just yields an empty Map.
+  const [platformPoints, gamesByTeam] = await Promise.all([
+    loadPlatformPoints(season, week, scoring),
+    loadGamesByTeam(season, week),
+  ]);
 
   const rankingByPlayer = new Map<string, SourceRanking>(rankings.map((r) => [r.playerId, r]));
   const rosteredPlayerIds = new Set(allRosters.flatMap((r) => r.players));
@@ -128,12 +162,14 @@ export async function analyzeLeague(leagueId: string): Promise<FullAnalysis | nu
           (m) => m.matchup_id === myMatchup.matchup_id && m.roster_id !== mine.sleeperRosterId,
         )
       : undefined;
+  const oppRosterRow = oppMatchup
+    ? allRosters.find((r) => r.sleeperRosterId === oppMatchup.roster_id)
+    : undefined;
 
   let opponent: Projection[] = [];
   let opponentName = "league average";
   if (oppMatchup) {
-    const oppRoster = allRosters.find((r) => r.sleeperRosterId === oppMatchup.roster_id);
-    opponentName = oppRoster?.teamName ?? oppRoster?.ownerDisplayName ?? "opponent";
+    opponentName = oppRosterRow?.teamName ?? oppRosterRow?.ownerDisplayName ?? "opponent";
     opponent = oppMatchup.starters
       .filter((id) => id && id !== "0")
       .flatMap((id) => {
@@ -186,5 +222,73 @@ export async function analyzeLeague(leagueId: string): Promise<FullAnalysis | nu
   for (const p of nameRows)
     players[p.id] = { name: p.fullName, position: p.position, team: p.team };
 
-  return { week, scoring, opponentName, expectedPoints, winProbability, waivers, players };
+  // The full matchup view — my team (with our numbers + the sim's calls) and
+  // the opponent's team (names, games, platform points only — no math).
+  // `oppRosterRow` was resolved once alongside `oppMatchup` above.
+  const everyId = [
+    ...new Set([
+      ...mine.players,
+      ...mine.starters,
+      ...(oppRosterRow?.players ?? []),
+      ...(oppRosterRow?.starters ?? []),
+    ]),
+  ].filter((id) => id && id !== "0");
+
+  const allRows: PlayerRow[] = everyId.length
+    ? (
+        await db().select().from(playersTable).where(inArray(playersTable.id, everyId))
+      ).map((p) => ({
+        id: p.id,
+        fullName: p.fullName,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        position: p.position,
+        team: p.team,
+        injuryStatus: p.injuryStatus,
+      }))
+    : [];
+
+  const ourProjections = new Map(
+    roster.map((r) => [r.playerId as string, { mean: r.projection.mean, sd: r.projection.sd }]),
+  );
+  const callsByPlayer = new Map(winProbability.calls.map((c) => [c.recommended as string, c]));
+
+  const rosterPositions = league.rosterPositions ?? [];
+  const myTeam = buildMyTeam({
+    rosterPositions,
+    starters: mine.starters,
+    allPlayerIds: mine.players,
+    rows: allRows,
+    games: gamesByTeam,
+    platformPoints,
+    ourProjections,
+    callsByPlayer,
+  });
+
+  const opponentTeam = oppRosterRow
+    ? buildTeam({
+        rosterPositions,
+        starters: oppRosterRow.starters,
+        allPlayerIds: oppRosterRow.players,
+        rows: allRows,
+        games: gamesByTeam,
+        platformPoints,
+      })
+    : [];
+
+  const opponentTeamName =
+    oppRosterRow?.teamName ?? oppRosterRow?.ownerDisplayName ?? "League average";
+
+  return {
+    week,
+    scoring,
+    opponentName,
+    opponentTeamName,
+    expectedPoints,
+    winProbability,
+    waivers,
+    players,
+    myTeam,
+    opponentTeam,
+  };
 }
