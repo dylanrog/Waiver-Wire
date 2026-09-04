@@ -57,7 +57,7 @@ export async function getJson<S extends ZodTypeAny>(
   schema: S,
   opts: ResolvedOptions,
 ): Promise<z.infer<S>> {
-  const url = `${opts.baseUrl}${path}`;
+  const url = path.startsWith("http") ? path : `${opts.baseUrl}${path}`;
   let lastError: Error = new SleeperUnavailable(url);
 
   for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {

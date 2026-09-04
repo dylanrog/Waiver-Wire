@@ -7,6 +7,7 @@ import {
   SleeperLeagueUser,
   SleeperMatchup,
   SleeperPlayer,
+  SleeperProjection,
   SleeperRoster,
   SleeperState,
   SleeperUser,
@@ -25,6 +26,7 @@ export interface SleeperClient {
    * request path. Records that fail validation are skipped, not fatal.
    */
   getAllPlayers(): Promise<SleeperPlayer[]>;
+  getProjections(season: string, week: number, positions: string[]): Promise<SleeperProjection[]>;
 }
 
 export function createSleeperClient(options: SleeperClientOptions = {}): SleeperClient {
@@ -68,6 +70,15 @@ export function createSleeperClient(options: SleeperClientOptions = {}): Sleeper
         if (parsed.success) players.push(parsed.data);
       }
       return players;
+    },
+
+    getProjections: (season, week, positions) => {
+      const query = positions.map((p) => `position[]=${p}`).join("&");
+      return getJson(
+        `https://api.sleeper.app/projections/nfl/${encodeURIComponent(season)}/${week}?season_type=regular&${query}`,
+        z.array(SleeperProjection),
+        opts,
+      );
     },
   };
 }
