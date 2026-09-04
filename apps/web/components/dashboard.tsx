@@ -2,22 +2,13 @@
 
 import { useState } from "react";
 
-import type { CallExplanation, Objective, StartSitCall } from "@waiver-wire/shared";
+import type { CallExplanation, Objective } from "@waiver-wire/shared";
 
 import type { FullAnalysis } from "@/lib/analysis";
+import { pct } from "@/lib/confidence";
+import type { MyMatchupPlayer } from "@/lib/matchup-view";
 
-/** amber (low confidence) → teal (high). One continuous ramp — never red/green. */
-function confidenceColor(c: number): string {
-  const lo = [0xc6, 0x8a, 0x3b];
-  const hi = [0x3f, 0xa8, 0x8f];
-  const t = Math.max(0, Math.min(1, c));
-  const [r, g, b] = lo.map((l, i) => Math.round(l + ((hi[i] ?? l) - l) * t));
-  return `rgb(${r} ${g} ${b})`;
-}
-
-const pct = (x: number) => `${Math.round(x * 100)}%`;
-
-type ExplainState = CallExplanation | "loading" | "error";
+import { Matchup, type ExplainState } from "./matchup";
 
 export function Dashboard({ analysis }: { analysis: FullAnalysis }) {
   const [opponentAware, setOpponentAware] = useState(true);
@@ -29,8 +20,14 @@ export function Dashboard({ analysis }: { analysis: FullAnalysis }) {
   const name = (id: string | null) => (id ? (analysis.players[id]?.name ?? id) : "");
   const winProb = analysis.winProbability.winProbability;
 
-  async function toggleRow(call: StartSitCall) {
-    const key = `${objective}:${call.slot}:${call.recommended}`;
+  const rowKey = (player: MyMatchupPlayer) =>
+    `${objective}:${player.slot}:${player.playerId}`;
+
+  async function toggleRow(player: MyMatchupPlayer) {
+    const call = player.call;
+    if (call === null) return;
+
+    const key = rowKey(player);
     if (open === key) {
       setOpen(null);
       return;
@@ -90,62 +87,13 @@ export function Dashboard({ analysis }: { analysis: FullAnalysis }) {
         />
       </label>
 
-      <ul className="flex flex-col">
-        {view.calls.map((call) => {
-          const key = `${objective}:${call.slot}:${call.recommended}`;
-          const swap = call.current !== null && call.current !== call.recommended;
-          const low = call.confidence < 0.6;
-          const detail = prose[key];
-          return (
-            <li key={key} className={swap ? "border-l-2 border-l-alert pl-2" : ""}>
-              <button
-                onClick={() => void toggleRow(call)}
-                className="flex w-full items-center gap-3 border-b border-hairline py-2.5 text-left"
-              >
-                <span className="w-10 shrink-0 text-xs text-muted">{call.slot}</span>
-                <span className="min-w-0 flex-1 truncate">{name(call.recommended)}</span>
-                {swap ? <span className="text-xs text-alert">↑ swap</span> : null}
-                {low ? <span title="the choice barely matters">⚠</span> : null}
-                <span
-                  className="w-10 text-right text-sm tabular-nums"
-                  style={{ color: confidenceColor(call.confidence) }}
-                >
-                  {pct(call.confidence)}
-                </span>
-              </button>
-
-              {open === key ? (
-                <div className="flex flex-col gap-2 border-b border-hairline bg-surface p-3 text-sm">
-                  {detail === "loading" || detail === undefined ? (
-                    <p className="text-muted">thinking…</p>
-                  ) : detail === "error" ? (
-                    <p className="text-alert">couldn&apos;t generate an explanation</p>
-                  ) : (
-                    <>
-                      {swap ? (
-                        <p className="text-xs text-muted">over {name(call.current)}</p>
-                      ) : null}
-                      <ul className="flex flex-col gap-0.5">
-                        {detail.pros.map((p) => (
-                          <li key={p} className="text-high">
-                            + {p}
-                          </li>
-                        ))}
-                        {detail.cons.map((c) => (
-                          <li key={c} className="text-low">
-                            − {c}
-                          </li>
-                        ))}
-                      </ul>
-                      <p className="text-xs text-muted">{detail.toggleEffect}</p>
-                    </>
-                  )}
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
+      <Matchup
+        analysis={analysis}
+        onToggleRow={(player) => void toggleRow(player)}
+        openKey={open}
+        prose={prose}
+        rowKey={rowKey}
+      />
 
       {analysis.waivers.some((w) => w.candidates.length > 0) ? (
         <section className="flex flex-col gap-2">
