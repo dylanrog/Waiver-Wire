@@ -7,25 +7,28 @@ recommendation is a distribution with a confidence score, not a point estimate.
 
 - Connects to a Sleeper league by username — no account required
 - Pulls the week's positional rankings from FantasyPros (expert consensus)
-- Finds the best available waiver adds at the positions you choose
+- Scans the waiver wire for upgrades at your weak positions
 - Simulates your matchup 10,000 times and scores every start/sit decision
 - Recalculates against your actual opponent when you flip the opponent-aware toggle,
   and explains what changed for each player
+- Installable as a PWA for the couch on Sunday
 
 ## Setup
-
-> **Not scaffolded yet.** The repo currently holds the design docs and the
-> `types.ts` contract only. The commands below are the target; the monorepo
-> skeleton lands in the first build PR (see `docs/ORCA.md`, Wave 0).
 
 ```bash
 corepack enable
 pnpm install
-cp .env.example .env.local   # fill in Supabase + Anthropic keys
-pnpm db:push
-pnpm rank-curves             # one-time, builds the projection curves from nflverse
-pnpm dev
+cp .env.example .env.local                  # fill in Supabase + Anthropic keys (contract: packages/shared/src/env.ts)
+pnpm --filter @waiver-wire/db db:migrate     # apply the schema to your Postgres
+pnpm dev                                     # http://localhost:3000
 ```
+
+Then open the app, enter a Sleeper username, and pick a league — the data is public,
+so it doesn't have to be your own account.
+
+The projection curves ship committed at `packages/projections/data/rank_curves.json`.
+To rebuild them from nflverse (a season-boundary task, not part of normal setup):
+`pnpm --filter @waiver-wire/scripts rank-curves`.
 
 ## Docs
 
@@ -48,10 +51,11 @@ packages/projections  Rank→distribution, Monte Carlo, lineup solver
 packages/db           Drizzle schema and queries
 ```
 
-Dependencies point inward toward `shared` and never sideways. `types.ts` sits at the
-repo root for now and moves to `packages/shared/src/types.ts` unchanged in Wave 0.
+Dependencies point inward toward `shared` and never sideways — see `CLAUDE.md` for
+the rule and the reasoning.
 
 ## Status
 
-MVP in progress, pre-scaffold. Read-only against Sleeper — this app never writes to
-your league.
+MVP feature-complete: connect flow, start/sit calls, waiver scan, opponent-aware
+simulation, LLM explanations, and PWA install. Read-only against Sleeper — this app
+never writes to your league.
