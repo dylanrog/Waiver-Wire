@@ -10,7 +10,7 @@ import {
   type Week,
 } from "@waiver-wire/shared";
 
-import { evaluateSlot, type SlotCandidate } from "./calls";
+import { evaluateAgainstBench, evaluateSlot, type SlotCandidate } from "./calls";
 import { rankCurves, type RankCurves } from "./curves";
 import { type RosterEntry } from "./lineup";
 import { simulateMatchup } from "./sim";
@@ -103,6 +103,33 @@ export function analyzeMatchup(input: AnalyzeInput): MatchupAnalysis {
     calls.push(call);
     recommendedByProjection.push(call.projection);
     used.add(call.recommended);
+  });
+
+  // Pass 2: recompute each call's alternative/confidence against the best
+  // genuinely-benched player for that slot — never another starter. `used`
+  // now holds every slot's final recommended player (pass 1 is complete), so
+  // this can use the real rest of the lineup instead of the mid-walk
+  // "pencilled guess" pass 1 needed while slots were still undecided.
+  calls.forEach((call, index) => {
+    const benchCandidates: SlotCandidate[] = input.roster
+      .filter((r) => eligibleFor(call.slot, r.position) && !used.has(r.playerId))
+      .map((r) => ({
+        playerId: r.playerId,
+        position: r.position,
+        projection: r.projection,
+        onBye: r.onBye,
+      }));
+    const rest = recommendedByProjection.filter((_, i) => i !== index);
+    const bench = evaluateAgainstBench({
+      slot: call.slot,
+      recommended: call.projection,
+      benchCandidates,
+      rest,
+      opponent: input.opponent,
+      objective: input.config.objective,
+      config: input.config,
+    });
+    calls[index] = { ...call, ...bench };
   });
 
   const sim = simulateMatchup(recommendedByProjection, input.opponent, input.config);
