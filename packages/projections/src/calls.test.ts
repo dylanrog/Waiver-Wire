@@ -151,7 +151,7 @@ describe("evaluateAgainstBench", () => {
       benchCandidates: [bench], // mean 3
       rest: team(45, 45),
       opponent: team(45, 45),
-      objective: "win_probability",
+      objective: "expected_points",
       config,
     });
     expect(result.confidence).toBeGreaterThan(0.9);
