@@ -118,3 +118,51 @@ export function evaluateSlot(input: SlotInput): StartSitCall {
     projection: best.projection,
   };
 }
+
+export interface BenchAlternativeInput {
+  slot: Slot;
+  /** The starter already decided for this slot — compared against, never re-ranked. */
+  recommended: Projection;
+  /** Players not recommended anywhere in the final lineup, eligible for this slot. */
+  benchCandidates: SlotCandidate[];
+  /** Every other slot's real recommended player — the true rest of the team. */
+  rest: Projection[];
+  opponent: Projection[];
+  objective: Objective;
+  config: SimConfig;
+}
+
+export interface BenchAlternativeResult {
+  alternative: PlayerId | null;
+  confidence: number;
+  confidenceUnderOtherObjective: number;
+}
+
+/**
+ * How confident should we be that `recommended` beats the best player still on
+ * the bench for this slot? `benchCandidates` must never include another
+ * starter — that's the bug (ARCHITECTURE.md "Confidence score") this exists
+ * to avoid: comparing a starter to a fellow starter measures slot assignment,
+ * not whether the decision matters.
+ */
+export function evaluateAgainstBench(input: BenchAlternativeInput): BenchAlternativeResult {
+  const eligible = input.benchCandidates.filter((c) => !c.onBye);
+  if (eligible.length === 0) {
+    return { alternative: null, confidence: 1, confidenceUnderOtherObjective: 1 };
+  }
+
+  const best = eligible
+    .map((c) => ({ candidate: c, score: scoreCandidate(c.projection, input, input.objective) }))
+    .sort((a, b) => b.score - a.score)[0]!.candidate;
+
+  return {
+    alternative: best.playerId,
+    confidence: pairedConfidence(input.recommended, best.projection, input, input.objective),
+    confidenceUnderOtherObjective: pairedConfidence(
+      input.recommended,
+      best.projection,
+      input,
+      otherObjective(input.objective),
+    ),
+  };
+}
