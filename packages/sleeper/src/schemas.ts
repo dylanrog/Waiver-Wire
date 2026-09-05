@@ -39,17 +39,19 @@ export const SleeperRosterSettings = z
   })
   .passthrough();
 
-export const SleeperRoster = z.object({
-  roster_id: z.number().int(),
-  owner_id: z.string().nullable(),
-  league_id: z.string().optional(),
-  co_owners: z.array(z.string()).nullable().optional(),
-  players: z.array(z.string()).nullable().default(null),
-  starters: z.array(z.string()).nullable().default(null),
-  reserve: z.array(z.string()).nullable().default(null),
-  taxi: z.array(z.string()).nullable().default(null),
-  settings: SleeperRosterSettings.default({}),
-});
+export const SleeperRoster = z
+  .object({
+    roster_id: z.number().int(),
+    owner_id: z.string().nullable(),
+    league_id: z.string().optional(),
+    co_owners: z.array(z.string()).nullable().optional(),
+    players: z.array(z.string()).nullable().default(null),
+    starters: z.array(z.string()).nullable().default(null),
+    reserve: z.array(z.string()).nullable().default(null),
+    taxi: z.array(z.string()).nullable().default(null),
+    settings: SleeperRosterSettings.default({}),
+  })
+  .passthrough();
 export type SleeperRoster = z.infer<typeof SleeperRoster>;
 
 export const SleeperLeagueUser = z.object({
@@ -100,3 +102,21 @@ export const SleeperPlayer = z
   })
   .passthrough();
 export type SleeperPlayer = z.infer<typeof SleeperPlayer>;
+
+export const SleeperProjection = z
+  .object({
+    player_id: z.coerce.string(),
+    week: z.number().int(),
+    season: z.coerce.string(),
+    team: z.string().nullable().optional(),
+    opponent: z.string().nullable().optional(),
+    stats: z
+      .object({
+        pts_ppr: z.number().nullable().optional(),
+        pts_half_ppr: z.number().nullable().optional(),
+        pts_std: z.number().nullable().optional(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+export type SleeperProjection = z.infer<typeof SleeperProjection>;

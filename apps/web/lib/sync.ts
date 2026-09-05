@@ -86,6 +86,7 @@ export async function syncLeague(leagueId: string, sleeperUserId: string): Promi
       starters: r.starters ?? [],
       reserve: r.reserve ?? [],
       taxi: r.taxi ?? [],
+      raw: r as unknown as Record<string, unknown>,
       settings: r.settings as Record<string, unknown>,
     })),
   );

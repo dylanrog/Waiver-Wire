@@ -2,7 +2,16 @@ import { and, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Db } from "./client";
-import { leagues, players, rawFetches, rosters, sourceRankings, unresolvedNames } from "./schema";
+import {
+  leagues,
+  nflGames,
+  platformProjections,
+  players,
+  rawFetches,
+  rosters,
+  sourceRankings,
+  unresolvedNames,
+} from "./schema";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -100,6 +109,7 @@ export interface RosterInput {
   starters?: string[];
   reserve?: string[];
   taxi?: string[];
+  raw?: Record<string, unknown> | null;
   settings?: Record<string, unknown> | null;
   syncedAt?: Date | null;
 }
@@ -188,4 +198,66 @@ export interface UnresolvedNameInput {
 export async function recordUnresolvedNames(db: Db, names: UnresolvedNameInput[]): Promise<void> {
   if (names.length === 0) return;
   await db.insert(unresolvedNames).values(names).onConflictDoNothing();
+}
+
+// ─── platform_projections ───────────────────────────────────────────────────
+
+export interface PlatformProjectionInput {
+  playerId: string;
+  points: number | null;
+  raw: Record<string, unknown>;
+}
+
+/** A week's platform projections are a full snapshot — replace, don't merge. */
+export async function replacePlatformProjections(
+  db: Db,
+  key: { season: string; week: number; scoring: string },
+  rows: PlatformProjectionInput[],
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(platformProjections)
+      .where(
+        and(
+          eq(platformProjections.season, key.season),
+          eq(platformProjections.week, key.week),
+          eq(platformProjections.scoring, key.scoring),
+        ),
+      );
+    if (rows.length > 0) {
+      const fetchedAt = new Date();
+      for (const chunk of chunked(rows, 1000)) {
+        await tx
+          .insert(platformProjections)
+          .values(chunk.map((r) => ({ ...r, ...key, fetchedAt })));
+      }
+    }
+  });
+}
+
+// ─── nfl_games ──────────────────────────────────────────────────────────────
+
+export interface NflGameInput {
+  kickoff: Date;
+  homeTeam: string;
+  awayTeam: string;
+  status: string;
+  raw: Record<string, unknown>;
+}
+
+/** A week's schedule is a full snapshot — replace, don't merge. */
+export async function replaceNflGames(
+  db: Db,
+  key: { season: string; week: number },
+  rows: NflGameInput[],
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(nflGames)
+      .where(and(eq(nflGames.season, key.season), eq(nflGames.week, key.week)));
+    if (rows.length > 0) {
+      const fetchedAt = new Date();
+      await tx.insert(nflGames).values(rows.map((r) => ({ ...r, ...key, fetchedAt })));
+    }
+  });
 }

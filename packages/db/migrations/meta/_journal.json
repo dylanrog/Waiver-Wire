@@ -8,6 +8,13 @@
       "when": 1788401106983,
       "tag": "0000_tranquil_raza",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788484380259,
+      "tag": "0001_dapper_power_man",
+      "breakpoints": true
     }
   ]
 }

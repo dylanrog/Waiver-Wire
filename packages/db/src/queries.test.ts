@@ -4,6 +4,8 @@ import {
   insertRawFetch,
   latestRawFetch,
   recordUnresolvedNames,
+  replaceNflGames,
+  replacePlatformProjections,
   replaceSourceRankings,
   upsertLeague,
   upsertPlayers,
@@ -128,6 +130,55 @@ describe("replaceSourceRankings", () => {
     const rows = await db.query.sourceRankings.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]?.playerId).toBe("p2");
+  });
+});
+
+describe("replacePlatformProjections", () => {
+  it("replaces the (season, week, scoring) snapshot", async () => {
+    const db = await makeTestDb();
+    await upsertPlayers(db, [
+      { id: "p1", fullName: "One", position: "RB" },
+      { id: "p2", fullName: "Two", position: "WR" },
+    ]);
+    const key = { season: "2026", week: 1, scoring: "HALF" };
+    await replacePlatformProjections(db, key, [
+      { playerId: "p1", points: 12.5, raw: {} },
+      { playerId: "p2", points: null, raw: {} },
+    ]);
+    await replacePlatformProjections(db, key, [{ playerId: "p1", points: 9.1, raw: {} }]);
+
+    const rows = await db.query.platformProjections.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.points).toBeCloseTo(9.1);
+  });
+
+  it("keeps snapshots for different scoring formats side by side", async () => {
+    const db = await makeTestDb();
+    await upsertPlayers(db, [{ id: "p1", fullName: "One", position: "RB" }]);
+    await replacePlatformProjections(db, { season: "2026", week: 1, scoring: "HALF" }, [
+      { playerId: "p1", points: 12.5, raw: {} },
+    ]);
+    await replacePlatformProjections(db, { season: "2026", week: 1, scoring: "PPR" }, [
+      { playerId: "p1", points: 14.0, raw: {} },
+    ]);
+    expect(await db.query.platformProjections.findMany()).toHaveLength(2);
+  });
+});
+
+describe("replaceNflGames", () => {
+  it("replaces the (season, week) snapshot", async () => {
+    const db = await makeTestDb();
+    const key = { season: "2026", week: 1 };
+    await replaceNflGames(db, key, [
+      { kickoff: new Date("2026-09-10T00:20:00Z"), homeTeam: "SEA", awayTeam: "NE", status: "scheduled", raw: {} },
+      { kickoff: new Date("2026-09-13T17:00:00Z"), homeTeam: "GB", awayTeam: "DET", status: "scheduled", raw: {} },
+    ]);
+    await replaceNflGames(db, key, [
+      { kickoff: new Date("2026-09-13T17:00:00Z"), homeTeam: "GB", awayTeam: "DET", status: "final", raw: {} },
+    ]);
+    const rows = await db.query.nflGames.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("final");
   });
 });
 

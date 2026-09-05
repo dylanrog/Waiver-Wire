@@ -104,6 +104,7 @@ Judge the variants on: does the win probability read at arm's length, is the tog
 effect legible without tapping into a detail view, and does a low-confidence row
 communicate "this doesn't matter much" rather than "we're confused."
 
+
 Onboarding and the waiver scan UI are separate, smaller sessions afterward — no fan-out
 needed.
 
