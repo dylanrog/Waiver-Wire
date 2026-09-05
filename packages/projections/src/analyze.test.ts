@@ -37,6 +37,7 @@ const roster: RosterEntry[] = [
   entry("wr1", "WR", 15, 8),
   entry("wr2", "WR", 13, 7),
   entry("wr3", "WR", 11, 6),
+  entry("wr4", "WR", 8, 5), // a genuine bench player — needed so `alternative` is non-null somewhere
   entry("te1", "TE", 9, 6),
   entry("k1", "K", 8, 4),
   entry("dst1", "DST", 7, 5),
@@ -71,7 +72,6 @@ const analysis = analyzeMatchup({
 });
 
 describe("analyzeMatchup", () => {
-
   it("returns a valid MatchupAnalysis", () => {
     expect(() => MatchupAnalysis.parse(analysis)).not.toThrow();
     expect(analysis.calls).toHaveLength(SLOTS.length);
@@ -143,13 +143,10 @@ describe("analyzeMatchup — confidence is measured against the bench, not anoth
     expect(rb1Call.confidence).toBeGreaterThan(0.9);
   });
 
-  it("never compares a slot's recommended player against a player used in another slot", () => {
-    for (const call of analysis.calls) {
-      if (call.alternative === null) continue;
-      const usedElsewhere = analysis.calls.some(
-        (other) => other.slot !== call.slot && other.recommended === call.alternative,
-      );
-      expect(usedElsewhere).toBe(false);
-    }
+  it("never proposes a player who is starting somewhere as the alternative", () => {
+    const recommended = new Set(analysis.calls.map((c) => c.recommended));
+    const alternatives = analysis.calls.map((c) => c.alternative).filter((a) => a !== null);
+    expect(alternatives.length).toBeGreaterThan(0); // guard against a vacuous pass
+    for (const alt of alternatives) expect(recommended.has(alt)).toBe(false);
   });
 });

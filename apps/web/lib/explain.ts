@@ -45,8 +45,12 @@ export async function explainCall(input: ExplainInput): Promise<CallExplanation>
     input.alternativeName ? `Best bench alternative: ${input.alternativeName}` : null,
     input.currentName ? `Currently in the slot: ${input.currentName}` : null,
     `Objective: ${objectiveText}`,
-    `Confidence in this call: ${call.confidence.toFixed(2)} (share of simulations where it beats the alternative; 0.5 = the choice barely matters)`,
-    `Confidence if the opponent-aware toggle were flipped (objective = ${other}): ${call.confidenceUnderOtherObjective.toFixed(2)}`,
+    input.alternativeName
+      ? `Confidence in this call: ${call.confidence.toFixed(2)} (share of simulations where ${input.recommendedName} beats ${input.alternativeName}; 0.5 = the choice barely matters)`
+      : "There is no eligible player on your bench for this slot — this is not really a decision.",
+    input.alternativeName
+      ? `Confidence if the opponent-aware toggle were flipped (objective = ${other}): ${call.confidenceUnderOtherObjective.toFixed(2)}`
+      : null,
     `Matchup: ${(input.winProbability * 100).toFixed(0)}% to win`,
   ]
     .filter(Boolean)
