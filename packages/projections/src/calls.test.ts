@@ -1,7 +1,7 @@
 import { PlayerId, type Objective, type Projection, type SimConfig } from "@waiver-wire/shared";
 import { describe, expect, it } from "vitest";
 
-import { evaluateSlot, type SlotCandidate } from "./calls";
+import { evaluateAgainstBench, evaluateSlot, type SlotCandidate } from "./calls";
 
 let seq = 0;
 function proj(mean: number, sd: number): Projection {
@@ -92,5 +92,68 @@ describe("evaluateSlot — expected points objective", () => {
     // so this same recommendation is a coin flip there.
     expect(call.confidence).toBeGreaterThan(0.5);
     expect(call.confidenceUnderOtherObjective).toBeLessThan(0.5);
+  });
+});
+
+describe("evaluateAgainstBench", () => {
+  const recommended = candidate(20, 6).projection; // the already-decided starter
+
+  it("returns undisputed (confidence 1, no alternative) with an empty bench", () => {
+    const result = evaluateAgainstBench({
+      slot: "RB",
+      recommended,
+      benchCandidates: [],
+      rest: team(45, 45),
+      opponent: team(90),
+      objective: "win_probability",
+      config,
+    });
+    expect(result.alternative).toBeNull();
+    expect(result.confidence).toBe(1);
+    expect(result.confidenceUnderOtherObjective).toBe(1);
+  });
+
+  it("compares recommended against the best bench candidate, not the worst", () => {
+    const weakBench = candidate(4, 3);
+    const strongBench = candidate(11, 5);
+    const result = evaluateAgainstBench({
+      slot: "RB",
+      recommended,
+      benchCandidates: [weakBench, strongBench],
+      rest: team(45, 45),
+      opponent: team(45, 45),
+      objective: "win_probability",
+      config,
+    });
+    expect(result.alternative).toBe(strongBench.playerId);
+  });
+
+  it("never proposes a bye-week player as the alternative", () => {
+    const onBye = candidate(30, 6, true);
+    const active = candidate(6, 3);
+    const result = evaluateAgainstBench({
+      slot: "RB",
+      recommended,
+      benchCandidates: [onBye, active],
+      rest: team(45, 45),
+      opponent: team(45, 45),
+      objective: "win_probability",
+      config,
+    });
+    expect(result.alternative).toBe(active.playerId);
+  });
+
+  it("a clearly worse bench option produces confidence near 1, not a coin flip", () => {
+    const bench = candidate(3, 3);
+    const result = evaluateAgainstBench({
+      slot: "RB",
+      recommended, // mean 20
+      benchCandidates: [bench], // mean 3
+      rest: team(45, 45),
+      opponent: team(45, 45),
+      objective: "win_probability",
+      config,
+    });
+    expect(result.confidence).toBeGreaterThan(0.9);
   });
 });
